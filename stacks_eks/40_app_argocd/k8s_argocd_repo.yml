@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ${NAME}
+  namespace: ${ARGOCD_NAMESPACE}
+  labels:
+    argocd.argoproj.io/secret-type: repository
+stringData:
+  name: ${REPOSITORY_NAME}
+  url: ${REPOSITORY_URL}
+  type: git
+  insecure: "true"
+  insecureIgnoreHostKey: "true"
+data:
+  sshPrivateKey: ${SSH_PRIVATE_KEY_B64}

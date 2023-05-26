@@ -1,0 +1,180 @@
+#+title: Cloudformation Demo
+
+* NOTE
+
+EKS(fargate)を使って
+argocd, dashboardを動かすDEMO環境をCloudformationで作ります。
+動作確認後、お掃除して終わります。
+
+* DEMO
+
+** TODO 作業開始
+** TODO ネットワーク構築 [0/2]
+下記TODOのmakeを自動実行
+make -C stacks_base deploy
+
+*** TODO VPC作成
+vpc,subnetを構築
+
+- [ ] network作成
+      make -C stacks_base/01_network deploy
+- [ ] 確認
+      lsvpc, lsvpc-sub
+
+*** TODO マネージドプレフィックスリスト作成
+マネージドプレフィックスリストを構築
+
+- [ ] plefix list
+      make -C stacks_base/02_prefix_list deploy
+- [ ] 確認
+      lsvpc-pl
+
+*** TODO NATインスタンス作成
+NATインスタンス(EC2)を構築
+
+- [ ] NATインスタンス
+      make -C stacks_base/02_ec2_nat deploy
+- [ ] 確認
+      lsec2
+
+** TODO EKS構築 [0/9]
+下記TODOのmakeを自動実行
+make -C stacks_eks deploy
+
+*** TODO aws: VPCにTAG設定
+alb controllerで使用するTAGをsubnetに設定します。
+
+- [ ] tag設定
+      make -C stacks_eks/01_vpc deploy
+- [ ] 確認
+      lstag <subnet_id>
+
+*** TODO aws: SSM作成
+SSMパラメータにbitbucketのssh秘密鍵登録
+
+- [ ] ssm parameter 登録
+      make -C stacks_eks/02_ssm deploy
+- [ ] 確認
+  lsssm
+
+*** TODO aws: EKS作成
+EKSクラスタを構築し、fargate profileを作成します
+
+- [ ] eks cluster作成
+      make -C stacks_eks/10_eks_cluster deploy
+- [ ] kubeconfig 設定
+      aws eks update-kubeconfig --name eks-main --alias eks-main
+- [ ] 確認
+      kubectl get pods -A
+
+*** TODO k8s: 初期設定
+fargate用のパッチなど
+
+- [ ] setup
+      make -C stacks_eks/11_k8s_init deploy
+- [ ] 確認
+      kubectl get svc -A
+
+*** TODO k8s: alb controller インストール
+k8sにalb controllerをhelmインストール
+
+- [ ] install
+      make -C stacks_eks/20_k8s_alb_controller deploy
+- [ ] 確認
+      kubectl get svc -A
+
+*** TODO k8s: eso インストール
+k8sにesoをhelmインストール
+
+- [ ] install
+      make -C stacks_eks/20_k8s_eso deploy
+- [ ] 確認. ssm-secret-storeのstatusがvalidならOK
+      kubectl get clustersecretstores
+
+*** TODO k8s: metric server インストール
+k8sにmetric serverをhelmインストール
+
+- [ ] install
+      make -C stacks_eks/20_k8s_metric_server deploy
+- [ ] 確認
+      kubectl get svc -A
+
+*** TODO k8s: argocd インストール
+k8sにargocdをhelmインストール
+
+- [ ] install
+      make -C stacks_eks/21_k8s_argocd deploy
+- [ ] 確認
+      kubectl get svc -A
+- [ ] GUIの初期password
+      kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
+- [ ] ALBのDNS名確認
+      lselb
+- [ ] GUIログイン
+      http://<ALBのDNS>
+- [ ] GUI確認. repositoryがsuccesssならOK
+
+*** TODO k8s: dashbord インストール
+k8sにdashboardをhelmインストール
+
+- [ ] install
+      make -C 20_stacks_eks/21_k8s_dashboard deploy
+- [ ] 確認
+      kubectl get svc -A
+- [ ] ALBのDNS名確認
+      lselb
+- [ ] GUI確認. 認証なし
+      http://<ALBのDNS>
+
+*** TODO k8s: app デプロイ
+argocdにapplicationを登録
+
+- [ ] deploy
+      make -C stacks_eks/40_app_argocd deploy
+- [ ] ALBのDNS名確認
+      lselb
+- [ ] argocd GUI確認
+      http://<ALBのDNS>
+- [ ] dashboard GUI確認
+      http://<ALBのDNS>
+- [ ] web
+      http://<nginx用ALBのDNS>
+      http://<php用ALBのDNS>
+
+** TODO podのスケールアウト
+- [ ] ApacheBench
+      ab -c 5 -n 1000 http://<php用ALBのDNS>
+- [ ] argocdのGUIで確認
+
+** TODO podに入る
+- [ ] dashboardでpodに入る(権限不足でNG)
+- [ ] dashboardが権限を無視するように変更
+```
+$ cat <<EOF | kubectl apply -f -
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubernetes-dashboard
+  namespace: kubernetes-dashboard
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: kubernetes-dashboard
+    namespace: kubernetes-dashboard
+EOF
+```
+- [ ] dashboardでpodに入る(ok)
+
+** TODO 掃除
+上記で作成したリソースを全部破棄
+
+- [ ] destroy
+      make -C stacks_eks remove
+      lseks
+      make -C stacks_base remove
+      lsvpc
+
+** TODO 作業終了

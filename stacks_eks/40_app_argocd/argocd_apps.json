@@ -1,0 +1,24 @@
+{
+  "apps": [
+    {
+      "argocd_app_name": "nginx",
+      "argocd_project": "default",
+      "git_repository_url": "git@bitbucket.org:blue21/tf-sample-eks.git",
+      "git_repository_path": "app/nginx",
+      "git_rev": "HEAD",
+      "ingress_name": "nginx",
+      "service_port": 80,
+      "service_name": "nginx-service"
+    },
+    {
+      "argocd_app_name": "php",
+      "argocd_project": "default",
+      "git_repository_url": "git@bitbucket.org:blue21/tf-sample-eks.git",
+      "git_repository_path": "app/php",
+      "git_rev": "HEAD",
+      "ingress_name": "php",
+      "service_port": 80,
+      "service_name": "php-service"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: VPC management prefix list
+
+#----------------------------------------- Parameters
+
+Parameters:
+  MyGlobalIp:
+    Type: String
+  VpcCidr:
+    Type: String
+
+#----------------------------------------- Resources
+
+Resources:
+
+  PrefixList1:
+    Type: AWS::EC2::PrefixList
+    Properties:
+      AddressFamily: IPv4
+      Entries:
+        - Cidr: !Ref VpcCidr
+          Description: vpc all
+      MaxEntries: 1
+      PrefixListName: !Sub "${AWS::StackName}-vpc-internal"
+
+  PrefixList2:
+    Type: AWS::EC2::PrefixList
+    Properties:
+      AddressFamily: IPv4
+      Entries:
+        - Cidr: !Sub "${MyGlobalIp}/32"
+          Description: my home
+      MaxEntries: 5
+      PrefixListName: !Sub "${AWS::StackName}-safe-public"
+
+#----------------------------------------- Outputs
+
+Outputs:
+
+  Pl1:
+    Description: The ID of the PrefixList (vpc all)
+    Value: !Ref PrefixList1
+    Export:
+      Name: !Sub "${AWS::StackName}-Pl1-Id"
+
+  Pl2:
+    Description: The ID of the PrefixList (public safe zone)
+    Value: !Ref PrefixList2
+    Export:
+      Name: !Sub "${AWS::StackName}-Pl2-Id"

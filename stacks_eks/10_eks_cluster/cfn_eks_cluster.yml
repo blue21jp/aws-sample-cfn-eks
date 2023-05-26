@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "EKS Cluster Create"
+
+#----------------------------------------- Parameters
+
+Parameters:
+  EKSClusterName:
+    Type: String
+  EKSVersion:
+    Type: String
+  VpcId:
+    Type: String
+  SubnetIdPublic1:
+    Type: String
+  SubnetIdPublic2:
+    Type: String
+  SubnetIdPrivate1:
+    Type: String
+  SubnetIdPrivate2:
+    Type: String
+  PrefixListId:
+    Type: String
+
+#----------------------------------------- Resources
+
+Resources:
+
+  EKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Ref EKSClusterName
+      Version: !Ref EKSVersion
+      RoleArn: !GetAtt EKSClusterRole.Arn
+      ResourcesVpcConfig:
+        EndpointPrivateAccess: false
+        EndpointPublicAccess: true
+        PublicAccessCidrs:
+          - "0.0.0.0/0"
+        SubnetIds:
+          - !Ref SubnetIdPublic1
+          - !Ref SubnetIdPublic2
+          - !Ref SubnetIdPrivate1
+          - !Ref SubnetIdPrivate2
+        # 追加のSG(コントロールプレーンSG)
+        # Fargateノードには付与されない
+        # https://qiita.com/MAKOTO1995/items/4e70998e50aaea5e9882
+        #SecurityGroupIds:
+        #  - !GetAtt SecurityGroupEKS.GroupId
+
+  EKSClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${AWS::StackName}-EKSCluster-Role
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action:
+              - "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "eks.amazonaws.com"
+        Version: "2012-10-17"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
+        - "arn:aws:iam::aws:policy/AmazonEKSServicePolicy"
+
+  # SG of ALB
+  SecurityGroupALB:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub "${AWS::StackName}-alb"
+      GroupDescription: EKS Cluster Security Group
+      VpcId: !Ref VpcId
+
+  SecurityGroupALBIngress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !GetAtt SecurityGroupALB.GroupId
+      FromPort: 80
+      ToPort: 80
+      IpProtocol: "tcp"
+      SourcePrefixListId: !Ref PrefixListId
+
+  SecurityGroupALBEgress1:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !GetAtt SecurityGroupALB.GroupId
+      IpProtocol: "-1"
+      CidrIp: "0.0.0.0/0"
+

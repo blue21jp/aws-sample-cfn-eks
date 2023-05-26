@@ -1,0 +1,8 @@
+{
+  "repositorys": [
+    {
+      "name": "sample",
+      "url": "git@bitbucket.org:blue21/tf-sample-eks.git"
+    }
+  ]
+}

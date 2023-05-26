@@ -1,0 +1,119 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: private subnet & nat instance
+
+#----------------------------------------- Parameters
+
+Parameters:
+  VpcId:
+    Type: String
+  SubnetId:
+    Type: String
+  RouteTableId:
+    Type: String
+  PrefixListId:
+    Type: String
+  AmiId:
+    Type: AWS::EC2::Image::Id
+  KeyName:
+    Type: String
+
+#----------------------------------------- Resources
+
+Resources:
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: NAT Instance
+      SecurityGroupIngress:
+      - SourcePrefixListId: !Ref PrefixListId
+        FromPort: -1
+        IpProtocol: "-1"
+        ToPort: -1
+      VpcId: !Ref VpcId
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+        Version: 2012-10-17
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM
+      Path: /
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - ec2:ModifyInstanceAttribute
+            Effect: Allow
+            Resource: '*'
+          Version: 2012-10-17
+        PolicyName: ec2-nat
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+      - !Ref InstanceRole
+
+  LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        InstanceMarketOptions:
+          SpotOptions:
+            SpotInstanceType: one-time
+            InstanceInterruptionBehavior: terminate
+          MarketType: spot
+        InstanceType: t3.nano
+        KeyName: !Ref KeyName
+        # マーケットプレイスで amzn-ami-vpc-nat で検索して選ぶ
+        ImageId: !Ref AmiId
+        IamInstanceProfile:
+          Arn:
+            Fn::GetAtt:
+            - InstanceProfile
+            - Arn
+        UserData:
+          Fn::Base64: !Sub |
+            #!/bin/bash
+            INSTANCEID=$(curl -s -m 60 http://169.254.169.254/latest/meta-data/instance-id)
+            aws --region ${AWS::Region} ec2 modify-instance-attribute --instance-id $INSTANCEID --source-dest-check "{\"Value\": false}"
+            yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm
+      LaunchTemplateName: NatInstance
+
+  NatInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      LaunchTemplate:
+        LaunchTemplateId: !Ref LaunchTemplate
+        Version: !GetAtt LaunchTemplate.LatestVersionNumber
+      SecurityGroupIds:
+        - !GetAtt SecurityGroup.GroupId
+      SubnetId: !Ref SubnetId
+      SourceDestCheck: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+
+  RouteNat:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref RouteTableId
+      DestinationCidrBlock: 0.0.0.0/0
+      InstanceId: !Ref NatInstance
+
+#----------------------------------------- Outputs
+
+Outputs:
+
+  Ec2Nat:
+    Description: instace id
+    Value: !Ref NatInstance

@@ -1,0 +1,16 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ${NAME}
+  namespace: ${ARGOCD_NAMESPACE}
+spec:
+  project: ${ARGOCD_PROJECT}
+  source:
+    repoURL: ${GIT_REPO_URL}
+    path: ${GIT_REPO_PATH}
+    targetRevision: ${GIT_REV}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ${APP_NAMESPACE}
+  syncPolicy:
+    automated: {}

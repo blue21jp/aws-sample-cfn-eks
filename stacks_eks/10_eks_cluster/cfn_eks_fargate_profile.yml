@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: EKS fargate pfofile
+
+#----------------------------------------- Parameters
+
+Parameters:
+  EKSClusterName:
+    Type: String
+  SubnetId1:
+    Type: String
+  SubnetId2:
+    Type: String
+
+#----------------------------------------- Resources
+
+Resources:
+
+  # 複数同時にプロファイル削除するとエラーになるので
+  # １個づつ削除するようにDependsOnをつけている。
+
+  EKSFargateProfile1:
+    Type: AWS::EKS::FargateProfile
+    Properties:
+      FargateProfileName: !Sub "${AWS::StackName}-kube-system"
+      ClusterName: !Ref EKSClusterName
+      PodExecutionRoleArn: !GetAtt EKSFargateProfileRole.Arn
+      Subnets:
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      Selectors:
+        - Namespace: kube-system
+
+  EKSFargateProfile2:
+    DependsOn: EKSFargateProfile1
+    Type: AWS::EKS::FargateProfile
+    Properties:
+      FargateProfileName: !Sub "${AWS::StackName}-ops"
+      ClusterName: !Ref EKSClusterName
+      PodExecutionRoleArn: !GetAtt EKSFargateProfileRole.Arn
+      Subnets:
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      Selectors:
+        - Namespace: external-secrets
+        - Namespace: kubernetes-dashboard
+        - Namespace: argocd
+
+  EKSFargateProfile3:
+    DependsOn: EKSFargateProfile2
+    Type: AWS::EKS::FargateProfile
+    Properties:
+      FargateProfileName: !Sub "${AWS::StackName}-app"
+      ClusterName: !Ref EKSClusterName
+      PodExecutionRoleArn: !GetAtt EKSFargateProfileRole.Arn
+      Subnets:
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+      Selectors:
+        - Namespace: app
+
+  EKSFargateProfileRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "eks-fargate-pods.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: /
+      ManagedPolicyArns:
+       - "arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
